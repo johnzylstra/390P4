@@ -98,7 +98,12 @@ def buildDiscriminator():
 
     # TODO: build a discriminator which takes in a (28 x 28 x 1) image - possibly from mnist_f
     #       and possibly from the generator - and outputs a single digit REAL (1) or FAKE (0)
-
+    model.add(Flatten(input_shape = IMAGE_SHAPE))
+    model.add(Dense(512))
+    model.add(LeakyReLU(alpha = 0.2))
+    model.add(Dense(256))
+    model.add(LeakyReLU(alpha = 0.2))
+    model.add(Dense(1, activation = "sigmoid"))
     # Creating a Keras Model out of the network
     inputTensor = Input(shape = IMAGE_SHAPE)
     return Model(inputTensor, model(inputTensor))
@@ -109,7 +114,17 @@ def buildGenerator():
 
     # TODO: build a generator which takes in a (NOISE_SIZE) noise array and outputs a fake
     #       mnist_f (28 x 28 x 1) image
-
+    model.add(Dense(256, input_dim = NOISE_SIZE))
+    model.add(LeakyReLU(alpha = 0.2))
+    model.add(BatchNormalization(momentum = 0.8))
+    model.add(Dense(512))
+    model.add(LeakyReLU(alpha = 0.2))
+    model.add(BatchNormalization(momentum = 0.8))
+    model.add(Dense(1024))
+    model.add(LeakyReLU(alpha = 0.2))
+    model.add(BatchNormalization(momentum = 0.8))
+    model.add(Dense(IMAGE_SIZE, activation = "tanh"))
+    model.add(Reshape(IMAGE_SHAPE))
     # Creating a Keras Model out of the network
     inputTensor = Input(shape = (NOISE_SIZE,))
     return Model(inputTensor, model(inputTensor))
