@@ -15,6 +15,8 @@ from tensorflow.keras.layers import Conv2D, MaxPooling2D, Conv2DTranspose, UpSam
 from tensorflow.keras.optimizers import Adam
 from scipy.misc import imsave
 import random
+import math
+import matplotlib.pyplot as plt
 
 random.seed(1618)
 np.random.seed(1618)
@@ -37,7 +39,7 @@ elif DATASET == "mnist_f":
     IMAGE_SHAPE = (IH, IW, IZ) = (28, 28, 1)
     CLASSLIST = ["top", "trouser", "pullover", "dress", "coat", "sandal", "shirt", "sneaker", "bag", "ankle boot"]
     # TODO: choose a label to train on from the CLASSLIST above
-    LABEL = "coat"
+    LABEL = "trouser"
 
 elif DATASET == "cifar_10":
     IMAGE_SHAPE = (IH, IW, IZ) = (32, 32, 3)
@@ -54,6 +56,17 @@ OUTPUT_DIR = "./outputs/" + OUTPUT_NAME
 
 # NOTE: switch to True in order to receive debug information
 VERBOSE_OUTPUT = False
+
+#ratio of discriminator:generator training iterations
+ratio = 1.0
+#rounds down iterations so there is always a 1:? or ?:1 ratio
+dTrain, gTrain = 0,0
+if ratio < 1:
+    dTrain = 1
+    gTrain = math.floor(1/ratio)
+else:
+    gTrain = 1
+    dTrain = math.floor(ratio)
 
 ################################### DATA FUNCTIONS ###################################
 
@@ -148,19 +161,27 @@ def buildGAN(images, epochs = 40000, batchSize = 32, loggingInterval = 0):
     # Training
     trueCol = np.ones((batchSize, 1))
     falseCol = np.zeros((batchSize, 1))
+
+    eps = np.empty((int)(epochs/loggingInterval))
+    adv = np.empty((int)(epochs/loggingInterval))
+    gen = np.empty((int)(epochs/loggingInterval))
+    i = 0
+    
     for epoch in range(epochs):
 
         # Train discriminator with a true and false batch
-        batch = images[np.random.randint(0, images.shape[0], batchSize)]
-        noise = np.random.normal(0, 1, (batchSize, NOISE_SIZE))
-        genImages = generator.predict(noise)
-        advTrueLoss = adversary.train_on_batch(batch, trueCol)
-        advFalseLoss = adversary.train_on_batch(genImages, falseCol)
-        advLoss = np.add(advTrueLoss, advFalseLoss) * 0.5
+        for d in range(dTrain):
+            batch = images[np.random.randint(0, images.shape[0], batchSize)]
+            noise = np.random.normal(0, 1, (batchSize, NOISE_SIZE))
+            genImages = generator.predict(noise)
+            advTrueLoss = adversary.train_on_batch(batch, trueCol)
+            advFalseLoss = adversary.train_on_batch(genImages, falseCol)
+            advLoss = np.add(advTrueLoss, advFalseLoss) * 0.5
 
         # Train generator by training GAN while keeping adversary component constant
-        noise = np.random.normal(0, 1, (batchSize, NOISE_SIZE))
-        genLoss = gan.train_on_batch(noise, trueCol)
+        for g in range(gTrain):
+            noise = np.random.normal(0, 1, (batchSize, NOISE_SIZE))
+            genLoss = gan.train_on_batch(noise, trueCol)
 
         # Logging
         if loggingInterval > 0 and epoch % loggingInterval == 0:
@@ -169,6 +190,19 @@ def buildGAN(images, epochs = 40000, batchSize = 32, loggingInterval = 0):
             print("\t\tDiscriminator accuracy: %.2f%%." % (100 * advLoss[1]))
             print("\t\tGenerator loss: %f." % genLoss)
             runGAN(generator, OUTPUT_DIR + "/" + OUTPUT_NAME + "_test_%d.png" % (epoch / loggingInterval))
+
+            eps[i] = epoch
+            adv[i] = advLoss[0]
+            gen[i] = genLoss
+            i += 1
+            
+    y1, = plt.plot(eps, adv, 'r', label = "Discriminator Loss")
+    y2, = plt.plot(eps, gen, 'g', label = "Generator Loss")
+    plt.xlabel("epochs")
+    plt.ylabel("loss")
+    plt.title("Generator and Discriminator Loss")
+    plt.legend(handles=[y1,y2])
+    plt.show()
 
     return (generator, adversary, gan)
 
@@ -193,11 +227,12 @@ def main():
     # Filter for just the class we are trying to generate
     data = preprocessData(raw)
     # Create and train all facets of the GAN
-    (generator, adv, gan) = buildGAN(data, epochs = 60000, loggingInterval = 1000)
+    (generator, adv, gan) = buildGAN(data, epochs = 60, loggingInterval = 10) #60,000 and 1,000
     # Utilize our spooky neural net gimmicks to create realistic counterfeit images
     for i in range(10):
         runGAN(generator, OUTPUT_DIR + "/" + OUTPUT_NAME + "_final_%d.png" % i)
     print("Images saved in %s directory." % OUTPUT_DIR)
+
 
 if __name__ == '__main__':
     main()
