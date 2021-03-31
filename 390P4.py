@@ -31,6 +31,9 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 DATASET = "mnist_f"
 #DATASET = "cifar_10"
 
+#NETARCH = "conv"
+NETARCH = "nonconv"
+
 if DATASET == "mnist_d":
     IMAGE_SHAPE = (IH, IW, IZ) = (28, 28, 1)
     LABEL = "numbers"
@@ -39,7 +42,7 @@ elif DATASET == "mnist_f":
     IMAGE_SHAPE = (IH, IW, IZ) = (28, 28, 1)
     CLASSLIST = ["top", "trouser", "pullover", "dress", "coat", "sandal", "shirt", "sneaker", "bag", "ankle boot"]
     # TODO: choose a label to train on from the CLASSLIST above
-    LABEL = "trouser"
+    LABEL = "bag"
 
 elif DATASET == "cifar_10":
     IMAGE_SHAPE = (IH, IW, IZ) = (32, 32, 3)
@@ -52,7 +55,7 @@ NOISE_SIZE = 100    # length of noise array
 
 # file prefixes and directory
 OUTPUT_NAME = DATASET + "_" + LABEL
-OUTPUT_DIR = "./content/drive/MyDrive/GANoutputs/" + OUTPUT_NAME
+OUTPUT_DIR = "./drive/MyDrive/GANoutputs/" + OUTPUT_NAME
 
 # NOTE: switch to True in order to receive debug information
 VERBOSE_OUTPUT = False
@@ -111,24 +114,23 @@ def buildDiscriminator():
 
     # TODO: build a discriminator which takes in a (28 x 28 x 1) image - possibly from mnist_f
     #       and possibly from the generator - and outputs a single digit REAL (1) or FAKE (0)
-    
-    #nonconvolutional GAN
-    # model.add(Flatten(input_shape = IMAGE_SHAPE))
-    # model.add(Dense(512))
-    # model.add(LeakyReLU(alpha = 0.2))
-    # model.add(Dense(256))
-    # model.add(LeakyReLU(alpha = 0.2))
-    # model.add(Dense(1, activation = "sigmoid"))
 
-    #convolutional GAN
-    model.add(Conv2D(64, (5,5), strides=(2,2), padding="same", input_shape = IMAGE_SHAPE))
-    model.add(LeakyReLU(alpha = 0.2))
-    model.add(keras.layers.Dropout(0.2))
-    model.add(Conv2D(128, (5,5), strides=(2,2), padding="same"))
-    model.add(LeakyReLU(alpha = 0.2))
-    model.add(keras.layers.Dropout(0.2))
-    model.add(Flatten())
-    model.add(Dense(1, activation = "sigmoid"))
+    if NETARCH == "nonconv":
+        model.add(Flatten(input_shape = IMAGE_SHAPE))
+        model.add(Dense(512))
+        model.add(LeakyReLU(alpha = 0.2))
+        model.add(Dense(256))
+        model.add(LeakyReLU(alpha = 0.2))
+        model.add(Dense(1, activation = "sigmoid"))
+    else:
+        model.add(Conv2D(64, (5,5), strides=(2,2), padding="same", input_shape = IMAGE_SHAPE))
+        model.add(LeakyReLU(alpha = 0.2))
+        model.add(keras.layers.Dropout(0.2))
+        model.add(Conv2D(128, (5,5), strides=(2,2), padding="same"))
+        model.add(LeakyReLU(alpha = 0.2))
+        model.add(keras.layers.Dropout(0.2))
+        model.add(Flatten())
+        model.add(Dense(1, activation = "sigmoid"))
 
     # Creating a Keras Model out of the network
     inputTensor = Input(shape = IMAGE_SHAPE)
@@ -141,35 +143,33 @@ def buildGenerator():
     # TODO: build a generator which takes in a (NOISE_SIZE) noise array and outputs a fake
     #       mnist_f (28 x 28 x 1) image
 
-    #nonconvolutional GAN
-    # model.add(Dense(256, input_dim = NOISE_SIZE))
-    # model.add(LeakyReLU(alpha = 0.2))
-    # model.add(BatchNormalization(momentum = 0.8))
-    # model.add(Dense(512))
-    # model.add(LeakyReLU(alpha = 0.2))
-    # model.add(BatchNormalization(momentum = 0.8))
-    # model.add(Dense(1024))
-    # model.add(LeakyReLU(alpha = 0.2))
-    # model.add(BatchNormalization(momentum = 0.8))
-    # model.add(Dense(IMAGE_SIZE, activation = "tanh"))
-    # model.add(Reshape(IMAGE_SHAPE))
+    if NETARCH == "nonconv":
+        model.add(Dense(256, input_dim = NOISE_SIZE))
+        model.add(LeakyReLU(alpha = 0.2))
+        model.add(BatchNormalization(momentum = 0.8))
+        model.add(Dense(512))
+        model.add(LeakyReLU(alpha = 0.2))
+        model.add(BatchNormalization(momentum = 0.8))
+        model.add(Dense(1024))
+        model.add(LeakyReLU(alpha = 0.2))
+        model.add(BatchNormalization(momentum = 0.8))
+        model.add(Dense(IMAGE_SIZE, activation = "tanh"))
+        model.add(Reshape(IMAGE_SHAPE))
+    else:
+        model.add(Dense(256*7*7, use_bias = False, input_dim = NOISE_SIZE))
+        model.add(BatchNormalization(momentum = 0.8))
+        model.add(LeakyReLU(alpha=0.2))
+        model.add(Reshape((7,7,256)))
 
-    #convolutional GAN
-    model.add(Dense(256*7*7, use_bias = False, input_dim = NOISE_SIZE))
-    model.add(BatchNormalization(momentum = 0.8))
-    model.add(LeakyReLU(alpha=0.2))
-    model.add(Reshape((7,7,256)))
+        model.add(Conv2DTranspose(128, (5,5), strides=(1,1), padding = "same", use_bias=False))
+        model.add(BatchNormalization(momentum = 0.8))
+        model.add(LeakyReLU(alpha = 0.2))
 
-    model.add(Conv2DTranspose(128, (5,5), strides=(1,1), padding = "same", use_bias=False))
-    model.add(BatchNormalization(momentum = 0.8))
-    model.add(LeakyReLU(alpha = 0.2))
+        model.add(Conv2DTranspose(64, (5,5), strides = (2,2), padding = "same", use_bias=False))
+        model.add(BatchNormalization(momentum = 0.8))
+        model.add(LeakyReLU(alpha = 0.2))
 
-    model.add(Conv2DTranspose(64, (5,5), strides = (2,2), padding = "same", use_bias=False))
-    model.add(BatchNormalization(momentum = 0.8))
-    model.add(LeakyReLU(alpha = 0.2))
-
-    model.add(Conv2DTranspose(1,(5,5), strides=(2,2), padding = "same", use_bias =False, activation="tanh"))
-    print(model.output_shape)
+        model.add(Conv2DTranspose(1,(5,5), strides=(2,2), padding = "same", use_bias =False, activation="tanh"))
 
     # Creating a Keras Model out of the network
     inputTensor = Input(shape = (NOISE_SIZE,))
@@ -260,7 +260,7 @@ def main():
     # Filter for just the class we are trying to generate
     data = preprocessData(raw)
     # Create and train all facets of the GAN
-    (generator, adv, gan) = buildGAN(data, epochs = 60000, loggingInterval = 1000) #60,000 and 1,000
+    (generator, adv, gan) = buildGAN(data, epochs = 40000, loggingInterval = 1000) #60,000 and 1,000
     # Utilize our spooky neural net gimmicks to create realistic counterfeit images
     for i in range(10):
         runGAN(generator, OUTPUT_DIR + "/" + OUTPUT_NAME + "_final_%d.png" % i)
